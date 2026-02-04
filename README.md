@@ -3,7 +3,7 @@ It demonstrates practical implementation of core DBMS concepts such as table des
 
 The system automates major banking operations including customer management, account handling, transactions, loans, investments, branch and employee management, while ensuring data integrity and business rule enforcement at the database level.
 
-🎯 Objectives
+Objectives
 
 To design a normalized relational database for a banking system
 
