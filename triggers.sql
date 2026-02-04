@@ -1,0 +1,216 @@
+CREATE SEQUENCE CUSTOMER_SEQ START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE BRANCH_SEQ START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE EMPLOYEE_SEQ START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE ACCOUNT_SEQ START WITH 1001 INCREMENT BY 1;
+CREATE SEQUENCE BANKTRANSACTION_SEQ START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE LOAN_SEQ START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE INVESTMENT_SEQ START WITH 1 INCREMENT BY 1;
+
+-- CUSTOMER
+CREATE OR REPLACE TRIGGER BI_CUSTOMER
+BEFORE INSERT ON Customer
+FOR EACH ROW
+BEGIN
+    IF :NEW.CustomerID IS NULL THEN
+        SELECT CUSTOMER_SEQ.NEXTVAL INTO :NEW.CustomerID FROM DUAL;
+    END IF;
+END;
+/
+
+-- BRANCH
+CREATE OR REPLACE TRIGGER BI_BRANCH
+BEFORE INSERT ON Branch
+FOR EACH ROW
+BEGIN
+    IF :NEW.BranchID IS NULL THEN
+        SELECT BRANCH_SEQ.NEXTVAL INTO :NEW.BranchID FROM DUAL;
+    END IF;
+END;
+/
+
+-- EMPLOYEE
+CREATE OR REPLACE TRIGGER BI_EMPLOYEE
+BEFORE INSERT ON Employee
+FOR EACH ROW
+BEGIN
+    IF :NEW.EmployeeID IS NULL THEN
+        SELECT EMPLOYEE_SEQ.NEXTVAL INTO :NEW.EmployeeID FROM DUAL;
+    END IF;
+END;
+/
+
+-- ACCOUNT NUMBER
+CREATE OR REPLACE TRIGGER trg_auto_account_number
+BEFORE INSERT ON Account
+FOR EACH ROW
+BEGIN
+    IF :NEW.AccountNumber IS NULL THEN
+        :NEW.AccountNumber := ACCOUNT_SEQ.NEXTVAL;
+    END IF;
+END;
+/
+
+-- BANK TRANSACTION
+CREATE OR REPLACE TRIGGER BI_BANK_TRANSACTION
+BEFORE INSERT ON BankTransaction
+FOR EACH ROW
+BEGIN
+    IF :NEW.TransactionID IS NULL THEN
+        SELECT BANKTRANSACTION_SEQ.NEXTVAL INTO :NEW.TransactionID FROM DUAL;
+    END IF;
+END;
+/
+
+-- LOAN
+CREATE OR REPLACE TRIGGER BI_LOAN
+BEFORE INSERT ON Loan
+FOR EACH ROW
+BEGIN
+    IF :NEW.LoanID IS NULL THEN
+        SELECT LOAN_SEQ.NEXTVAL INTO :NEW.LoanID FROM DUAL;
+    END IF;
+END;
+/
+
+-- INVESTMENT
+CREATE OR REPLACE TRIGGER BI_INVESTMENT
+BEFORE INSERT ON Investment
+FOR EACH ROW
+BEGIN
+    IF :NEW.InvestmentID IS NULL THEN
+        SELECT INVESTMENT_SEQ.NEXTVAL INTO :NEW.InvestmentID FROM DUAL;
+    END IF;
+END;
+/
+
+
+-- PREVENT NEGATIVE BALANCE
+CREATE OR REPLACE TRIGGER trg_prevent_negative_balance
+BEFORE UPDATE OF Balance ON Account
+FOR EACH ROW
+BEGIN
+    IF :NEW.Balance < 0 THEN
+        RAISE_APPLICATION_ERROR(-20010, 'Balance cannot be negative.');
+    END IF;
+END;
+/
+
+-- AUTO-CLOSE LOAN WHEN END DATE PASSED
+CREATE OR REPLACE TRIGGER trg_auto_close_loan
+BEFORE UPDATE OF Status ON Loan
+FOR EACH ROW
+BEGIN
+    IF SYSDATE >= :OLD.EndDate THEN
+        :NEW.Status  := 'Closed';
+        :NEW.EndDate := SYSDATE;
+    END IF;
+END;
+/
+
+-- SET ACCOUNT OPEN DATE
+CREATE OR REPLACE TRIGGER trg_set_account_open_date
+BEFORE INSERT ON Account
+FOR EACH ROW
+BEGIN
+    IF :NEW.DateOpened IS NULL THEN
+        :NEW.DateOpened := SYSDATE;
+    END IF;
+END;
+/
+
+-- EMAIL FORMAT CHECK
+CREATE OR REPLACE TRIGGER trg_customer_email_check
+BEFORE INSERT OR UPDATE ON Customer
+FOR EACH ROW
+BEGIN
+    IF :NEW.Email NOT LIKE '%@%.%' THEN
+        RAISE_APPLICATION_ERROR(-20003, 'Invalid email format.');
+    END IF;
+END;
+/
+
+-- AUTO HIRE DATE
+CREATE OR REPLACE TRIGGER trg_set_hire_date
+BEFORE INSERT ON Employee
+FOR EACH ROW
+BEGIN
+    IF :NEW.HireDate IS NULL THEN
+        :NEW.HireDate := SYSDATE;
+    END IF;
+END;
+/
+
+-- BLOCK TRANSACTION ON FROZEN ACCOUNT
+CREATE OR REPLACE TRIGGER trg_block_frozen_account
+BEFORE INSERT ON BankTransaction
+FOR EACH ROW
+DECLARE
+    v_status VARCHAR2(20);
+BEGIN
+    SELECT AccountStatus INTO v_status
+    FROM Account
+    WHERE AccountNumber = :NEW.AccountNumber;
+
+    IF v_status = 'Frozen' THEN
+        RAISE_APPLICATION_ERROR(-20040, 'Cannot perform transactions on a frozen account.');
+    END IF;
+END;
+/
+
+-- NOTIFICATION TRIGGERS (DBMS_OUTPUT)
+CREATE OR REPLACE TRIGGER trg_customer_after_update
+AFTER UPDATE ON Customer
+FOR EACH ROW
+BEGIN
+    DBMS_OUTPUT.PUT_LINE(
+        'Customer updated: ' || :OLD.CustomerID ||
+        ' | Old Name: ' || :OLD.FirstName ||
+        ' → New Name: ' || :NEW.FirstName
+    );
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_customer_after_delete
+AFTER DELETE ON Customer
+FOR EACH ROW
+BEGIN
+    DBMS_OUTPUT.PUT_LINE(
+        'Customer deleted: CustomerID = ' || :OLD.CustomerID
+    );
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_account_after_insert
+AFTER INSERT ON Account
+FOR EACH ROW
+BEGIN
+    DBMS_OUTPUT.PUT_LINE(
+        'New account opened: AccNo = ' || :NEW.AccountNumber ||
+        ', CustomerID = ' || :NEW.CustomerID
+    );
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_loan_status_notify
+AFTER UPDATE OF Status ON Loan
+FOR EACH ROW
+BEGIN
+    DBMS_OUTPUT.PUT_LINE(
+        'LoanID ' || :OLD.LoanID ||
+        ' Status changed from "' || :OLD.Status ||
+        '" to "' || :NEW.Status || '".'
+    );
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_investment_created_notify
+AFTER INSERT ON Investment
+FOR EACH ROW
+BEGIN
+    DBMS_OUTPUT.PUT_LINE(
+        'New Investment Created: ID = ' || :NEW.InvestmentID ||
+        ', Amount = ' || :NEW.Amount ||
+        ', CustomerID = ' || :NEW.CustomerID
+    );
+END;
+/
